@@ -1,13 +1,26 @@
 #!/usr/bin/env bash
 set -e
 
-echo "🔧 Setting up BusyBox WebAssembly build environment..."
+echo "========================================="
+echo "🔧 BusyBox WebAssembly Setup Script"
+echo "========================================="
+echo ""
+echo "This script will:"
+echo "  1. Check for required dependencies"
+echo "  2. Build BusyBox WebAssembly if not already built"
+echo "  3. Show available commands"
+echo ""
 
 # Check if build already exists
 if [ -f "build/wasm/busybox_unstripped.js" ]; then
-    echo "✅ Build already exists. Run 'make clean-wasm' to rebuild from scratch."
+    echo "✅ Build already exists at: build/wasm/busybox_unstripped.js"
+    echo ""
+    echo "Options:"
+    echo "  - Run 'make clean-wasm' to rebuild from scratch"
+    echo "  - Run 'make config' to change enabled commands"
 else
-    echo "📦 Building BusyBox WebAssembly..."
+    echo "📦 Building BusyBox WebAssembly (this may take a few minutes)..."
+    echo ""
     make build/wasm/busybox_unstripped.js
     
     if [ -f "build/wasm/busybox_unstripped.js" ]; then

@@ -36,9 +36,14 @@
             echo "  - ncurses: available (for menuconfig)"
             echo ""
             
-            # Run setup if it exists
-            if [ -f "./setup.sh" ]; then
-              ./setup.sh
+            # Check if build exists and provide information
+            if [ -f "build/wasm/busybox_unstripped.js" ]; then
+              echo "✅ BusyBox WebAssembly build found!"
+              echo "   Run 'node build/wasm/busybox_unstripped.js --list' to see all commands"
+            else
+              echo "⚠️  BusyBox WebAssembly not built yet!"
+              echo "   Run './setup.sh' to build automatically, or"
+              echo "   Run 'make build/wasm/busybox_unstripped.js' to build manually"
             fi
             
             echo "🛠️  Quick Commands:"
