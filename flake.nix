@@ -16,16 +16,42 @@
           buildInputs = with pkgs; [
             wget
             emscripten
+            ncurses
+            pkg-config
+            gcc
           ];
 
           shellHook = ''
+            # Set up aliases
             alias emgcc=emcc
-            echo "BusyBox WASM development environment"
-            echo "Available tools:"
-            echo "  - wget: $(which wget)"
-            echo "  - emcc: $(which emcc)"
-            echo "  - emgcc: aliased to emcc"
-            echo "  - emscripten version: $(emcc --version | head -n1)"
+            alias busybox-wasm='node build/wasm/busybox_unstripped.js'
+            
+            echo "========================================="
+            echo "🚀 BusyBox WASM Development Environment"
+            echo "========================================="
+            echo ""
+            echo "📦 Build Tools:"
+            echo "  - emcc: $(emcc --version | head -n1)"
+            echo "  - wget: available"
+            echo "  - ncurses: available (for menuconfig)"
+            echo ""
+            
+            # Run setup if it exists
+            if [ -f "./setup.sh" ]; then
+              ./setup.sh
+            fi
+            
+            echo "🛠️  Quick Commands:"
+            echo "  busybox-wasm [cmd]      - Run BusyBox command directly"
+            echo "  make clean-wasm          - Clean and rebuild"
+            echo "  make config              - Configure BusyBox options"
+            echo "  nix develop              - Re-enter this environment"
+            echo ""
+            echo "📚 Examples:"
+            echo "  busybox-wasm ls"
+            echo "  busybox-wasm echo 'Hello World'"
+            echo "  busybox-wasm cat README.md"
+            echo "========================================="
           '';
         };
       });

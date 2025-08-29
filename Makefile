@@ -22,6 +22,9 @@ build/native/busybox: source/busybox.tar.bz2 source/miniz.zip source/diff3prog.c
 	cp .config build/native
 	$(MAKE) -C build/native
 
+clean-wasm:
+	rm -rf build/wasm
+
 build/wasm/busybox_unstripped.js: source/busybox.tar.bz2 source/miniz.zip source/diff3prog.c
 	mkdir -p build/wasm/arch/em
 	tar -xf source/busybox.tar.bz2 --strip-components=1 --directory=build/wasm
