@@ -1,0 +1,91 @@
+# Makefile for building BusyBox as standalone WASM for k23
+
+URL_BUSYBOX ?= https://busybox.net/downloads/busybox-1.32.0.tar.bz2
+URL_MINIZ ?= https://github.com/richgel999/miniz/releases/download/2.1.0/miniz-2.1.0.zip
+URL_DIFF3 ?= https://raw.githubusercontent.com/openbsd/src/master/usr.bin/diff3/diff3prog.c
+
+source/busybox.tar.bz2:
+	mkdir -p source
+	wget -nc "$(URL_BUSYBOX)" -O $@
+
+source/miniz.zip:
+	mkdir -p source
+	wget -nc "$(URL_MINIZ)" -O $@
+
+source/diff3prog.c:
+	mkdir -p source
+	wget "$(URL_DIFF3)" -O $@
+
+clean-k23:
+	rm -rf build/k23
+
+# Build standalone WASM binary for k23
+build/k23/busybox.wasm: source/busybox.tar.bz2 source/miniz.zip source/diff3prog.c
+	mkdir -p build/k23/arch/em
+	tar -xf source/busybox.tar.bz2 --strip-components=1 --directory=build/k23
+	cp nanozip.c build/k23/archival && unzip -d build/k23/archival -o source/miniz.zip miniz.h miniz.c
+	cat diff3.h > build/k23/editors/diff3.c && sed 's/main/diff3_main/g' source/diff3prog.c >> build/k23/editors/diff3.c
+	cp .config build/k23
+	
+	# Create a WASI-compatible main wrapper
+	echo '#include <stdlib.h>' > build/k23/wasi_main.c
+	echo '#include <unistd.h>' >> build/k23/wasi_main.c
+	echo '' >> build/k23/wasi_main.c
+	echo 'extern int main(int argc, char **argv);' >> build/k23/wasi_main.c
+	echo '' >> build/k23/wasi_main.c
+	echo '/* Export _start for k23 */' >> build/k23/wasi_main.c
+	echo '__attribute__((export_name("_start")))' >> build/k23/wasi_main.c
+	echo 'void _start(void) {' >> build/k23/wasi_main.c
+	echo '    /* Simple startup - k23 will handle argc/argv setup */' >> build/k23/wasi_main.c
+	echo '    char *argv[] = {"busybox", NULL};' >> build/k23/wasi_main.c
+	echo '    int ret = main(1, argv);' >> build/k23/wasi_main.c
+	echo '    exit(ret);' >> build/k23/wasi_main.c
+	echo '}' >> build/k23/wasi_main.c
+	
+	# Create emcc wrapper that builds standalone WASM
+	echo '#!/bin/sh' > build/k23/emgcc
+	echo '# Compile to standalone WebAssembly without JS runtime' >> build/k23/emgcc
+	echo 'exec emcc \' >> build/k23/emgcc
+	echo '    -s STANDALONE_WASM=1 \' >> build/k23/emgcc
+	echo '    -s EXPORTED_FUNCTIONS="[_start,_main]" \' >> build/k23/emgcc
+	echo '    -s ERROR_ON_UNDEFINED_SYMBOLS=0 \' >> build/k23/emgcc
+	echo '    -s ALLOW_MEMORY_GROWTH=1 \' >> build/k23/emgcc
+	echo '    -s TOTAL_MEMORY=16777216 \' >> build/k23/emgcc
+	echo '    -s FILESYSTEM=0 \' >> build/k23/emgcc
+	echo '    -s INVOKE_RUN=0 \' >> build/k23/emgcc
+	echo '    "$$@"' >> build/k23/emgcc
+	chmod +x build/k23/emgcc
+	
+	# Create Makefile for emcc build
+	echo 'cmd_busybox__ = $$(CC) -o $$@.wasm \' > build/k23/arch/em/Makefile
+	echo '    -Wl,--start-group \' >> build/k23/arch/em/Makefile
+	echo '    -O2 \' >> build/k23/arch/em/Makefile
+	echo '    -s STANDALONE_WASM=1 \' >> build/k23/arch/em/Makefile
+	echo '    -s EXPORTED_FUNCTIONS="[_main]" \' >> build/k23/arch/em/Makefile
+	echo '    -s ERROR_ON_UNDEFINED_SYMBOLS=0 \' >> build/k23/arch/em/Makefile
+	echo '    -s FILESYSTEM=0 \' >> build/k23/arch/em/Makefile
+	echo '    -s INVOKE_RUN=0 \' >> build/k23/arch/em/Makefile
+	echo '    -s ALLOW_MEMORY_GROWTH=1 \' >> build/k23/arch/em/Makefile
+	echo '    $$(CFLAGS) $$(CFLAGS_busybox) $$(LDFLAGS) $$(EXTRA_LDFLAGS) \' >> build/k23/arch/em/Makefile
+	echo '    $$(core-y) $$(libs-y) $$(patsubst %,-l%,$$(subst :, ,$$(LDLIBS))) \' >> build/k23/arch/em/Makefile
+	echo '    -Wl,--end-group && cp $$@.wasm $$@' >> build/k23/arch/em/Makefile
+	
+	# Fix printf format warning
+	sed -i.bak 's/printf(usage_array\[i\]\.aname);/printf("%s", usage_array[i].aname);/' build/k23/applets/usage_pod.c || true
+	
+	# Build with emcc
+	PATH=$(CURDIR)/build/k23:$$PATH $(MAKE) -C build/k23 ARCH=em CROSS_COMPILE=em SKIP_STRIP=y
+	
+	# The WASM file will be at build/k23/busybox_unstripped.wasm
+	cp build/k23/busybox_unstripped.wasm build/k23/busybox.wasm
+
+# Test the build
+test-k23: build/k23/busybox.wasm
+	@echo "WASM binary created at: build/k23/busybox.wasm"
+	@echo "Checking exports:"
+	@wasm-objdump -x build/k23/busybox.wasm | grep -A5 "Export" || true
+	@echo ""
+	@echo "Checking imports:"
+	@wasm-objdump -x build/k23/busybox.wasm | head -100 || true
+
+.PHONY: clean-k23 test-k23
