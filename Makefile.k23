@@ -45,6 +45,9 @@ build/k23/busybox.wasm: source/busybox.tar.bz2 source/miniz.zip source/diff3prog
 	# Create emcc wrapper that builds standalone WASM
 	echo '#!/bin/sh' > build/k23/emgcc
 	echo '# Compile to standalone WebAssembly without JS runtime' >> build/k23/emgcc
+	echo '# Set writable cache directory' >> build/k23/emgcc
+	echo 'export EM_CACHE=$${EM_CACHE:-$(CURDIR)/build/k23/.emscripten_cache}' >> build/k23/emgcc
+	echo 'mkdir -p $$EM_CACHE' >> build/k23/emgcc
 	echo 'exec emcc \' >> build/k23/emgcc
 	echo '    -s STANDALONE_WASM=1 \' >> build/k23/emgcc
 	echo '    -s EXPORTED_FUNCTIONS="[_start,_main]" \' >> build/k23/emgcc
@@ -73,8 +76,8 @@ build/k23/busybox.wasm: source/busybox.tar.bz2 source/miniz.zip source/diff3prog
 	# Fix printf format warning
 	sed -i.bak 's/printf(usage_array\[i\]\.aname);/printf("%s", usage_array[i].aname);/' build/k23/applets/usage_pod.c || true
 	
-	# Build with emcc
-	PATH=$(CURDIR)/build/k23:$$PATH $(MAKE) -C build/k23 ARCH=em CROSS_COMPILE=em SKIP_STRIP=y
+	# Build with emcc (set cache directory to avoid permission issues)
+	EM_CACHE=$(CURDIR)/build/k23/.emscripten_cache PATH=$(CURDIR)/build/k23:$$PATH $(MAKE) -C build/k23 ARCH=em CROSS_COMPILE=em SKIP_STRIP=y
 	
 	# The WASM file will be at build/k23/busybox_unstripped.wasm
 	cp build/k23/busybox_unstripped.wasm build/k23/busybox.wasm
